@@ -1,0 +1,307 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>Dental Pet</title>
+  <meta name="description" content="A digital pet game with coins, dental health quizzes, and daily login rewards." />
+
+  <!-- Manifest + Theme -->
+  <link rel="manifest" href="./manifest.json">
+ntent="#0d6efd" />
+
+  <!-- iOS-specific PWA meta -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dental Pet">
+
+  <!-- iOS icons (Apple doesn’t always read manifest icons) -->
+  </icons/apple-touch-icon-180.png
+  ./icons/apple-touch-icon-167.png
+  <link rel="apple-touch-icon" sizes="152x152" href="./icons/apple-touch-icon-152.png">
+
+rel="icon" type="image/png" sizes="16x16" href="./icons/favicon-16.png">
+
+me: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      margin: 0; background: #f5f7fb; color: #111;
+    }
+    header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; border-bottom: 1px solid #e6e9ef; background: #fff;
+      position: sticky; top: 0; z-index: 10;
+    }
+    header img { width: 40px; height: 40px; border-radius: 9px; }
+    header h1 { font-size: 1.25rem; margin: 0; }
+    .coins {
+      margin-left: auto; font-weight: 700; background: #f1f4fa; padding: 6px 10px; border-radius: 8px;
+    }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 16px; }
+    .card {
+      background: #fff; border: 1px solid #e5e8ef; border-radius: 12px;
+      padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px;
+    }
+    .btn {
+      background: #0d6efd; color: #fff; border: 0; padding: 10px 16px;
+      border-radius: 8px; font-weight: 600; cursor: pointer;
+    }
+    .btn[disabled] { opacity: .5; cursor: not-allowed; }
+    .hint { font-size: .95rem; color: #555; }
+    .pet-area {
+      display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: center;
+    }
+    .pet-frame {
+      width: 240px; height: 240px; border-radius: 16px; border: 1px dashed #cbd2df;
+      background: #eef3ff; display: grid; place-items: center; overflow: hidden;
+    }
+    .pet-frame img {
+      image-rendering: pixelated; /* good for pixel art sprites */
+      max-width: 100%; max-height: 100%;
+      animation: bob 3s ease-in-out infinite;
+    }
+    @keyframes bob {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+    .quiz-area h3 { margin-top: 0; }
+    .quiz-option {
+      display: block; margin: 8px 0; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid #dbe0ea; background: #f9fbff; cursor: pointer;
+    }
+    .result { font-weight: 700; margin-top: 8px; }
+    footer { text-align: center; padding: 24px; color: #666; font-size: .9rem; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #0b0c0f; color: #eef; }
+      header, .card { background: #131518; border-color: #242834; }
+      .coins { background: #1a2335; }
+      .pet-frame { background: #172033; border-color: #2a3347; }
+      .quiz-option { background: #0f1625; border-color: #2a3347; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Uses maskable icon as small logo -->
+    ./icons/maskable-192.png
+    <h1>Dental Pet</h1>
+    <div class="coins">🪙 <span id="coinCount">0</span></div>
+  </header>
+
+  <div class="wrap">
+    <!-- Pet area -->
+    <div class="card pet-area">
+      <div class="pet-frame">
+        <!-- Replace src with your sprite later -->
+        ./sprites/pet-idle.png
+      </div>
+      <div>
+        <p>Take care of your pet and earn coins by learning about dental health!</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn" id="dailyBtn">Claim daily coins</button>
+          <button class="btn" id="quizBtn">Take a quiz</button>
+          <button class="btn" id="installBtn" hidden>Install app</button>
+        </div>
+        <p class="hint" style="margin-top:8px;">
+          On iPhone: open in Safari → Share → <strong>Add to Home Screen</strong>.
+        </p>
+      </div>
+    </div>
+
+    <!-- Quiz area -->
+    <div class="card quiz-area" id="quizCard" hidden>
+      <h3>Dental Health Quiz</h3>
+      <p id="quizQuestion"></p>
+      <div id="quizOptions"></div>
+      <div class="result" id="quizResult"></div>
+    </div>
+
+    <!-- About -->
+    <div class="card">
+      <h3>About</h3>
+      <p>
+        This PWA caches core files for offline use and stores your coins locally on your device.
+        Daily login rewards can be claimed once per day. Quizzes teach good dental habits.
+      </p>
+      <p class="hint">Note: Educational content only—not medical advice.</p>
+    </div>
+  </div>
+
+  <footer>
+    Dental Pet · PWA demo · © 2025
+  </footer>
+
+  <script>
+    // ===== Game State (localStorage) =====
+    const LS_KEYS = {
+      coins: 'dp_coins',
+      lastLogin: 'dp_last_login',
+    };
+    const DAILY_REWARD = 20;
+    const QUIZ_REWARD_CORRECT = 10;
+    const QUIZ_PENALTY_WRONG = 0; // change if you want penalties
+
+    const coinCountEl = document.getElementById('coinCount');
+    const dailyBtn = document.getElementById('dailyBtn');
+    const quizBtn = document.getElementById('quizBtn');
+    const quizCard = document.getElementById('quizCard');
+    const quizQuestionEl = document.getElementById('quizQuestion');
+    const quizOptionsEl = document.getElementById('quizOptions');
+    const quizResultEl = document.getElementById('quizResult');
+    const installBtn = document.getElementById('installBtn');
+
+    function getLocalDateString() {
+      // Returns YYYY-MM-DD in user's local time
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    function getCoins() {
+      return parseInt(localStorage.getItem(LS_KEYS.coins) || '0', 10);
+    }
+    function setCoins(value) {
+      localStorage.setItem(LS_KEYS.coins, String(value));
+      coinCountEl.textContent = value;
+    }
+
+    function loadCoins() {
+      setCoins(getCoins());
+    }
+
+    // Daily login logic
+    function canClaimToday() {
+      const today = getLocalDateString();
+      const last = localStorage.getItem(LS_KEYS.lastLogin);
+      return last !== today;
+    }
+    function markClaimed() {
+      localStorage.setItem(LS_KEYS.lastLogin, getLocalDateString());
+    }
+    function updateDailyBtn() {
+      dailyBtn.disabled = !canClaimToday();
+      dailyBtn.textContent = canClaimToday()
+        ? `Claim daily ${DAILY_REWARD} coins`
+        : 'Already claimed today';
+    }
+
+    dailyBtn.addEventListener('click', () => {
+      if (!canClaimToday()) return;
+      const newCoins = getCoins() + DAILY_REWARD;
+      setCoins(newCoins);
+      markClaimed();
+      updateDailyBtn();
+      // Optional sprite feedback
+      const sprite = document.getElementById('petSprite');
+      sprite.style.animation = 'bob .6s ease-in-out 2';
+      setTimeout(() => sprite.style.animation = 'bob 3s ease-in-out infinite', 1500);
+    });
+
+    // ===== Dental Quiz =====
+    const QUIZ_QUESTIONS = [
+      {
+        q: 'How long should you brush your teeth each time?',
+        options: ['30 seconds', '1 minute', '2 minutes', '5 minutes'],
+        correctIndex: 2,
+        info: 'Dentists recommend brushing for a full 2 minutes.'
+      },
+      {
+        q: 'How often should you replace your toothbrush?',
+        options: ['Every month', 'Every 3–4 months', 'Once a year', 'Never'],
+        correctIndex: 1,
+        info: 'Replace every 3–4 months or sooner if bristles are frayed.'
+      },
+      {
+        q: 'When is it best to brush your teeth?',
+        options: ['Right after every meal', 'Twice daily (morning and night)', 'Only in the morning', 'Only at night'],
+        correctIndex: 1,
+        info: 'Brushing twice daily helps remove plaque and prevents cavities.'
+      },
+      {
+        q: 'What does fluoride in toothpaste help with?',
+        options: ['Whitening only', 'Fresh breath only', 'Strengthening enamel and preventing cavities', 'Nothing'],
+        correctIndex: 2,
+        info: 'Fluoride strengthens enamel and helps prevent tooth decay.'
+      },
+      {
+        q: 'What’s a good habit for flossing?',
+        options: ['Never floss', 'Floss once a week', 'Floss daily', 'Floss only when teeth hurt'],
+        correctIndex: 2,
+        info: 'Flossing daily removes plaque between teeth where brushes can’t reach.'
+      }
+    ];
+
+    function startQuiz() {
+      quizCard.hidden = false;
+      quizResultEl.textContent = '';
+      const rand = Math.floor(Math.random() * QUIZ_QUESTIONS.length);
+      const item = QUIZ_QUESTIONS[rand];
+      quizQuestionEl.textContent = item.q;
+
+      quizOptionsEl.innerHTML = '';
+      item.options.forEach((opt, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'quiz-option';
+        btn.textContent = opt;
+        btn.addEventListener('click', () => {
+          const correct = idx === item.correctIndex;
+          if (correct) {
+            setCoins(getCoins() + QUIZ_REWARD_CORRECT);
+            quizResultEl.textContent = `✅ Correct! +${QUIZ_REWARD_CORRECT} coins. ${item.info}`;
+          } else {
+            quizResultEl.textContent = `❌ Not quite. ${item.info}`;
+          }
+          // mild sprite feedback
+          const sprite = document.getElementById('petSprite');
+          sprite.style.transform = correct ? 'scale(1.04)' : 'scale(0.96)';
+          setTimeout(() => (sprite.style.transform = 'scale(1)'), 300);
+        });
+        quizOptionsEl.appendChild(btn);
+      });
+    }
+
+    quizBtn.addEventListener('click', startQuiz);
+
+    // ===== Service Worker =====
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js')
+          .then(reg => console.log('SW registered', reg.scope))
+          .catch(err => console.error('SW registration failed', err));
+      });
+    }
+
+    // ===== Install prompt (Android/desktop) =====
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.hidden = false;
+    });
+    installBtn.addEventListener('click', async () => {
+      installBtn.hidden = true;
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log('Install prompt outcome:', outcome);
+      deferredPrompt = null;
+    });
+
+    // iOS hint
+    const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    if (isIOS && !isStandalone) {
+      console.log('On iOS Safari: use Share → Add to Home Screen');
+    }
+
+    // Init
+    loadCoins();
+    updateDailyBtn();
+  </script>
+</body>
+</html>
